@@ -1260,6 +1260,7 @@ dependencies = [
  "getrandom",
  "log",
  "miden-assembly",
+ "miden-assembly-syntax",
  "miden-core",
  "miden-crypto",
  "miden-mast-package",
