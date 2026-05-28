@@ -70,12 +70,14 @@ rstest         = { workspace = true }
 tempfile       = { version = "3.19" }
 
 [build-dependencies]
-fs-err         = { workspace = true }
-miden-assembly = { workspace = true }
-miden-core     = { workspace = true }
-miden-core-lib = { workspace = true }
-regex          = { workspace = true }
-walkdir        = { workspace = true }
+fs-err                 = { workspace = true }
+miden-assembly         = { workspace = true }
+miden-package-registry = { workspace = true, features = ["resolver"] }
+miden-core             = { workspace = true }
+miden-core-lib         = { workspace = true }
+regex                  = { workspace = true }
+walkdir                = { workspace = true }
+env_logger             = { version = "0.11" }
 
 [package.metadata.cargo-shear]
 ignored = ["getrandom"]
