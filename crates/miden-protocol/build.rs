@@ -1,12 +1,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use fs_err as fs;
+use miden_assembly::diagnostics::reporting::ReportHandlerOpts;
 use miden_assembly::diagnostics::{IntoDiagnostic, Result, WrapErr, miette};
 use miden_assembly::{Assembler, DefaultSourceManager, KernelLibrary, Library};
 use miden_core::events::EventId;
+use miden_package_registry;
 use regex::Regex;
 use walkdir::WalkDir;
 
@@ -58,36 +60,60 @@ fn main() -> Result<()> {
     // re-build when the MASM code changes
     println!("cargo::rerun-if-changed={ASM_DIR}/");
 
-    // Copies the MASM code to the build directory
-    let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let build_dir = env::var("OUT_DIR").unwrap();
-    let src = Path::new(&crate_dir).join(ASM_DIR);
-    let dst = Path::new(&build_dir).to_path_buf();
-    shared::copy_directory(src, &dst, ASM_DIR)?;
+    miden_assembly::diagnostics::reporting::set_hook(Box::new(|_| {
+        Box::new(ReportHandlerOpts::new().build())
+    }))
+    .unwrap();
+    miden_assembly::diagnostics::reporting::set_panic_hook();
 
-    // set source directory to {OUT_DIR}/asm
-    let source_dir = dst.join(ASM_DIR);
+    // Enable debug tracing to stderr via the MIDEN_LOG environment variable, if present
+    env_logger::Builder::from_env("MIDEN_LOG").format_timestamp(None).init();
 
-    // copy the shared modules to the kernel and protocol library folders
-    copy_shared_modules(&source_dir)?;
 
-    // set target directory to {OUT_DIR}/assets
-    let target_dir = Path::new(&build_dir).join(ASSETS_DIR);
+    // Build core library
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let asm_dir = Path::new(manifest_dir).join(ASM_DIR);
 
-    // compile transaction kernel
-    let mut assembler = compile_tx_kernel(
-        &source_dir.join(ASM_TX_KERNEL_DIR),
-        &target_dir.join("kernels"),
-        &build_dir,
-    )?;
+    let assembler = Assembler::default();
+    let mut registry = miden_package_registry::InMemoryPackageRegistry::default();
+    let mut project_assembler =
+        assembler.for_project_at_path(asm_dir.join("miden-project.toml"), &mut registry)?;
 
-    // compile protocol library
-    let protocol_lib = compile_protocol_lib(&source_dir, &target_dir, assembler.clone())?;
-    assembler.link_dynamic_library(protocol_lib)?;
+    let package =
+        project_assembler.assemble(miden_assembly::ProjectTargetSelector::Library, "release")?;
 
-    generate_error_constants(&source_dir, &build_dir)?;
+    let build_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    generate_event_constants(&source_dir, &target_dir)?;
+    // // Copies the MASM code to the build directory
+    // let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    // let build_dir = env::var("OUT_DIR").unwrap();
+    // let src = Path::new(&crate_dir).join(ASM_DIR);
+    // let dst = Path::new(&build_dir).to_path_buf();
+    // shared::copy_directory(src, &dst, ASM_DIR)?;
+
+    // // set source directory to {OUT_DIR}/asm
+    // let source_dir = dst.join(ASM_DIR);
+
+    // // copy the shared modules to the kernel and protocol library folders
+    // copy_shared_modules(&source_dir)?;
+
+    // // set target directory to {OUT_DIR}/assets
+    // let target_dir = Path::new(&build_dir).join(ASSETS_DIR);
+
+    // // compile transaction kernel
+    // let mut assembler = compile_tx_kernel(
+    //     &source_dir.join(ASM_TX_KERNEL_DIR),
+    //     &target_dir.join("kernels"),
+    //     &build_dir,
+    // )?;
+
+    // // compile protocol library
+    // let protocol_lib = compile_protocol_lib(&source_dir, &target_dir, assembler.clone())?;
+    // assembler.link_dynamic_library(protocol_lib)?;
+
+    // generate_error_constants(&source_dir, &build_dir)?;
+
+    // generate_event_constants(&source_dir, &target_dir)?;
 
     Ok(())
 }
