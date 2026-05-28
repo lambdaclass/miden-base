@@ -61,6 +61,7 @@ fn main() -> Result<()> {
     // Copies the MASM code to the build directory
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let build_dir = env::var("OUT_DIR").unwrap();
+    println!("cargo::warning=destinarion: {}", build_dir);
     let src = Path::new(&crate_dir).join(ASM_DIR);
     let dst = Path::new(&build_dir).to_path_buf();
     shared::copy_directory(src, &dst, ASM_DIR)?;
@@ -88,6 +89,13 @@ fn main() -> Result<()> {
     generate_error_constants(&source_dir, &build_dir)?;
 
     generate_event_constants(&source_dir, &target_dir)?;
+
+    let mut registry = miden_package_registry::InMemoryPackageRegistry::default();
+    let mut project_assembler = Assembler::default().for_project_at_path(
+        Path::new(&crate_dir).join(ASM_DIR).join("miden-project.toml"),
+        &mut registry,
+    )?;
+    project_assembler.assemble(miden_assembly::ProjectTargetSelector::Library, "release")?;
 
     Ok(())
 }

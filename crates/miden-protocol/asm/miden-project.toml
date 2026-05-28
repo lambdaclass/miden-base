@@ -1,0 +1,7 @@
+[package]
+name = "miden-protocol"
+version = "0.16.0"
+
+[lib]
+namespace = "miden::protocol"
+path = "mod.masm"
